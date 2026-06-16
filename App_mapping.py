@@ -104,126 +104,94 @@ POIDS = {
     "diam_mm":         5,
 }
 
-def score_structure(attrs_mto, attrs_wgt):
-    total_poids = 0
-    total_score = 0
+# ==============================
+# SCORE STRUCTURÉ (colonnes directes)
+# ==============================
+def score_structure(row_mto, row_wgt):
+    score = 0
+    poids_total = 0
 
-    for cle, poids in POIDS.items():
-        v_mto = attrs_mto.get(cle)
-        v_wgt = attrs_wgt.get(cle)
+    # 1. Désignation vs Short_Code_Desc (priorité 1 — poids 50)
+    des_mto = nettoyer_texte(row_mto.get("Designation"))
+    des_wgt = nettoyer_texte(row_wgt.get("Short_Code_Desc"))
+    if des_mto or des_wgt:
+        poids_total += 50
+        if des_mto and des_wgt:
+            score += 50 * (fuzz.token_sort_ratio(des_mto, des_wgt) / 100)
 
-        if v_mto is None and v_wgt is None:
-            continue  # absent des deux : neutre
+    # 2. Dn1 vs Siz1 (priorité 2 — poids 30)
+    dn1_mto = str(row_mto.get("Dn1 [mm]", "")).strip()
+    dn1_wgt = str(row_wgt.get("Siz1", "")).strip()
+    if dn1_mto or dn1_wgt:
+        poids_total += 30
+        if dn1_mto and dn1_wgt:
+            score += 30 if dn1_mto == dn1_wgt else 0
 
-        total_poids += poids
+    # 3. Dn2 vs Siz2 (priorité 3 — poids 20)
+    dn2_mto = str(row_mto.get("Dn2 [mm]", "")).strip()
+    dn2_wgt = str(row_wgt.get("Siz2", "")).strip()
+    if dn2_mto or dn2_wgt:
+        poids_total += 20
+        if dn2_mto and dn2_wgt:
+            score += 20 if dn2_mto == dn2_wgt else 0
 
-        if v_mto is None or v_wgt is None:
-            # L'un a l'attribut, l'autre non → pénalité
-            total_score += poids * 0.1
-            continue
+    return round((score / poids_total * 100), 1) if poids_total > 0 else 0
 
-        if isinstance(v_mto, list) and isinstance(v_wgt, list):
-            communs = set(v_mto) & set(v_wgt)
-            union = set(v_mto) | set(v_wgt)
-            ratio = len(communs) / len(union) if union else 1.0
-            total_score += poids * ratio
-        else:
-            if str(v_mto) == str(v_wgt):
-                total_score += poids  # match exact : score plein
-            elif cle == "categorie":
-                # Catégorie : fuzzy tolérant (fautes de frappe légères)
-                fuzzy = fuzz.ratio(str(v_mto), str(v_wgt)) / 100
-                total_score += poids * fuzzy
-            else:
-                # Autres attributs : fuzzy partiel (crédit réduit)
-                fuzzy = fuzz.ratio(str(v_mto), str(v_wgt)) / 100
-                total_score += poids * fuzzy * 0.6
-
-    if total_poids == 0:
-        return 0
-
-    score_struct = (total_score / total_poids) * 100
-
-    # Complément fuzzy global (30% du score final)
-    txt_mto = attrs_mto.get("_clean", "")
-    txt_wgt = attrs_wgt.get("_clean", "")
-    score_fuzzy = fuzz.token_sort_ratio(txt_mto, txt_wgt)
-
-    return round(0.70 * score_struct + 0.30 * score_fuzzy, 1)
 
 # ==============================
 # MATCHING PRINCIPAL
 # ==============================
-def run_mapping(table_MTO, table_WGTID, col_MTO, col_WGTID_desc, col_WGTID_id):
-    # Préparer MTO
-    table_MTO["clean"] = table_MTO[col_MTO].apply(nettoyer_texte)
-    table_MTO["attrs"] = table_MTO[col_MTO].apply(extraire_attributs)
-    table_MTO["dn"] = table_MTO["attrs"].apply(lambda a: "dn" + a["dn_principal"] if "dn_principal" in a else None)
-    for i, row in table_MTO.iterrows():
-        table_MTO.at[i, "attrs"]["_clean"] = row["clean"]
+def run_mapping(table_MTO, table_WGTID):
 
-    # Préparer WGTID
-    table_WGTID["clean"] = table_WGTID[col_WGTID_desc].apply(nettoyer_texte)
-    table_WGTID["attrs"] = table_WGTID[col_WGTID_desc].apply(extraire_attributs)
-    table_WGTID["dn"] = table_WGTID["attrs"].apply(lambda a: "dn" + a["dn_principal"] if "dn_principal" in a else None)
-    for i, row in table_WGTID.iterrows():
-        table_WGTID.at[i, "attrs"]["_clean"] = row["clean"]
-
-    # Double groupement : par catégorie+DN d'abord, fallback DN seul, fallback global
-    wgtid_par_cat_dn = {}
-    wgtid_par_dn = {}
+    # Groupement WGTID par Siz1 pour réduire le nb de comparaisons
+    wgtid_par_siz1 = {}
     for _, row in table_WGTID.iterrows():
-        cat = row["attrs"].get("categorie")
-        dn = row["dn"]
-        key_cat_dn = f"{cat}__{dn}" if cat and dn else None
-        if key_cat_dn:
-            wgtid_par_cat_dn.setdefault(key_cat_dn, []).append(row)
-        if dn:
-            wgtid_par_dn.setdefault(dn, []).append(row)
+        siz1 = str(row.get("Siz1", "")).strip()
+        wgtid_par_siz1.setdefault(siz1, []).append(row)
 
     resultats = []
     total = len(table_MTO)
     progress_bar = st.progress(0, text="Matching en cours...")
 
-    for i, (_, row) in enumerate(table_MTO.iterrows()):
-        desc_original = row[col_MTO]
-        attrs_mto = row["attrs"]
-        dn = row["dn"]
-        cat = attrs_mto.get("categorie")
+    for i, (_, row_mto) in enumerate(table_MTO.iterrows()):
+        dn1_mto = str(row_mto.get("Dn1 [mm]", "")).strip()
 
-        # Sélection du sous-ensemble : catégorie+DN > DN seul > tout
-        key_cat_dn = f"{cat}__{dn}" if cat and dn else None
-        if key_cat_dn and key_cat_dn in wgtid_par_cat_dn:
-            subset_rows = wgtid_par_cat_dn[key_cat_dn]
-        elif dn and dn in wgtid_par_dn:
-            subset_rows = wgtid_par_dn[dn]
+        # Sous-ensemble : Siz1 = Dn1 si possible, sinon tout
+        if dn1_mto and dn1_mto in wgtid_par_siz1:
+            subset = wgtid_par_siz1[dn1_mto]
         else:
-            subset_rows = table_WGTID.to_dict("records")
+            subset = [r for rows in wgtid_par_siz1.values() for r in rows]
 
         meilleur_score = -1
         meilleure_desc = None
         meilleur_id = None
 
-        for row_wgt in subset_rows:
-            attrs_wgt = row_wgt["attrs"] if isinstance(row_wgt, dict) else row_wgt["attrs"]
-            s = score_structure(attrs_mto, attrs_wgt)
+        for row_wgt in subset:
+            s = score_structure(row_mto, row_wgt)
             if s > meilleur_score:
                 meilleur_score = s
-                meilleure_desc = row_wgt[col_WGTID_desc]
-                meilleur_id = row_wgt[col_WGTID_id]
+                meilleure_desc = row_wgt.get("Short_Code_Desc")
+                meilleur_id = row_wgt.get("Wgt_ID")
 
-        attrs_str = " | ".join(f"{k}={v}" for k, v in attrs_mto.items() if k != "_clean")
-        resultats.append([desc_original, meilleure_desc, meilleur_id, meilleur_score, attrs_str])
+        resultats.append([
+            row_mto.get("Designation"),
+            row_mto.get("Dn1 [mm]"),
+            row_mto.get("Dn2 [mm]"),
+            meilleure_desc,
+            meilleur_id,
+            meilleur_score,
+        ])
         progress_bar.progress((i + 1) / total, text=f"Matching... ({i+1}/{total})")
 
     progress_bar.empty()
 
     return pd.DataFrame(resultats, columns=[
-        "Long description MTO",
-        "Long description WGTID",
-        "WGTID",
+        "Designation MTO",
+        "Dn1 MTO",
+        "Dn2 MTO",
+        "Short_Code_Desc WGTID",
+        "Wgt_ID",
         "Score (%)",
-        "Attributs extraits (debug)"
     ])
 
 # ==============================
@@ -241,7 +209,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
     try:
-        table_MTO = pd.read_excel(uploaded_file, sheet_name="MTO à coller")
+        table_MTO = pd.read_excel(uploaded_file, sheet_name="MTO")
         table_WGTID = pd.read_excel(uploaded_file, sheet_name="WGTID")
     except Exception as e:
         st.error(f"Erreur de lecture : {e}")
@@ -288,10 +256,7 @@ if uploaded_file:
     show_debug = st.checkbox("Afficher la colonne 'Attributs extraits' (debug)", value=False)
 
     if st.button("▶️ Lancer le mapping structuré", type="primary"):
-        df_resultat = run_mapping(
-            table_MTO.copy(), table_WGTID.copy(),
-            col_MTO, col_WGTID_desc, col_WGTID_id
-        )
+        df_resultat = run_mapping(table_MTO.copy(), table_WGTID.copy())
 
         st.success(f"✅ Mapping terminé — {len(df_resultat)} lignes traitées")
 
