@@ -261,8 +261,6 @@ if uploaded_file:
         st.success(f"✅ Mapping terminé — {len(df_resultat)} lignes traitées")
 
         df_affiche = df_resultat[df_resultat["Score (%)"] >= seuil].copy()
-        if not show_debug:
-            df_affiche = df_affiche.drop(columns=["Attributs extraits (debug)"])
 
         c1, c2, c3 = st.columns(3)
         c1.metric("Lignes matchées", len(df_affiche))
