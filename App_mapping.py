@@ -41,7 +41,7 @@ def run_mapping(table_MTO, table_WGTID):
 
     for i, (_, row_mto) in enumerate(table_MTO.iterrows()):
         dn1_mto = str(row_mto.get("Dn1 [mm]", "")).strip()
-        concat_mto = nettoyer_texte(row_mto.get("Désignation", ""))
+        concat_mto = nettoyer_texte(row_mto.get("Designation", ""))
 
         # Filtrage par DN — fallback sur toute la table si DN absent/inconnu
         subset = wgtid_par_siz1.get(dn1_mto)
