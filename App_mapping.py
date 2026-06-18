@@ -96,7 +96,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
     try:
-        table_MTO = pd.read_excel(uploaded_file, sheet_name="MTO à coller")
+        table_MTO = pd.read_excel(uploaded_file, sheet_name="MTO")
         table_WGTID = pd.read_excel(uploaded_file, sheet_name="WGTID")
     except Exception as e:
         st.error(f"Erreur de lecture : {e}")
