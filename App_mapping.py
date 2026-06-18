@@ -32,7 +32,7 @@ def run_mapping(table_MTO, table_WGTID):
         wgtid_par_siz1.setdefault(siz1, []).append(row)
 
     # Pré-calcul descriptions WGTID nettoyées
-    table_WGTID["_long_desc_clean"] = table_WGTID["Long_Description_FR"].apply(nettoyer_texte)
+    table_WGTID["_long_desc_clean"] = table_WGTID["Description"].apply(nettoyer_texte)
     wgtid_records = table_WGTID.to_dict("records")
 
     resultats = []
@@ -41,7 +41,7 @@ def run_mapping(table_MTO, table_WGTID):
 
     for i, (_, row_mto) in enumerate(table_MTO.iterrows()):
         dn1_mto = str(row_mto.get("Dn1 [mm]", "")).strip()
-        concat_mto = nettoyer_texte(row_mto.get("Concaténation", ""))
+        concat_mto = nettoyer_texte(row_mto.get("Désignation", ""))
 
         # Filtrage par DN — fallback sur toute la table si DN absent/inconnu
         subset = wgtid_par_siz1.get(dn1_mto)
