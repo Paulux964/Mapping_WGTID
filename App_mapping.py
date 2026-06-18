@@ -45,8 +45,6 @@ def run_mapping(table_MTO, table_WGTID):
 
         # Filtrage par DN — fallback sur toute la table si DN absent/inconnu
         subset = wgtid_par_siz1.get(dn1_mto)
-        if not subset:
-            subset = wgtid_records
 
         meilleur_score = -1
         meilleure_long_desc = None
