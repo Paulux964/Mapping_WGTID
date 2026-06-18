@@ -2,8 +2,6 @@
 ### streamlit run "C:\Users\PFAU\Desktop\PY\app_mapping_2.py"
 
 
-### TEST TEST TEST
-
 
 import streamlit as st
 from rapidfuzz import fuzz
@@ -160,12 +158,7 @@ def run_mapping(table_MTO, table_WGTID):
     for i, (_, row_mto) in enumerate(table_MTO.iterrows()):
         dn1_mto = str(row_mto.get("Dn1 [mm]", "")).strip()
 
-        # Sous-ensemble : Siz1 = Dn1 si possible, sinon tout
-        if dn1_mto and dn1_mto in wgtid_par_siz1:
-            subset = wgtid_par_siz1[dn1_mto]
-        else:
-            subset = [r for rows in wgtid_par_siz1.values() for r in rows]
-
+        subset = wgtid_par_siz1[dn1_mto]
         meilleur_score = -1
         meilleure_desc = None
         meilleur_id = None
