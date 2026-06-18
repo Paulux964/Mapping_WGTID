@@ -23,7 +23,7 @@ def nettoyer_texte(txt):
 # ==============================
 # EXTRACTION DES ATTRIBUTS CLÉS
 # ==============================
-def extraire_attributs(txt):
+#def extraire_attributs(txt):
     if pd.isna(txt):
         return {}
     
@@ -183,10 +183,10 @@ def run_mapping(table_MTO, table_WGTID):
     progress_bar.empty()
 
     return pd.DataFrame(resultats, columns=[
-        "Designation MTO",
+        "Concaténation",
         "Dn1 MTO",
         "Dn2 MTO",
-        "Short_Code_Desc WGTID",
+        "Long_Description_FR",
         "Wgt_ID",
         "Score (%)",
     ])
@@ -231,17 +231,6 @@ if uploaded_file:
             if "Wgt_ID" in table_WGTID.columns else 0)
 
     st.info(f"**MTO** : {len(table_MTO)} lignes  |  **WGTID** : {len(table_WGTID)} lignes")
-
-    # Test d'extraction
-    with st.expander("🔬 Tester l'extraction d'attributs sur une description"):
-        exemple = st.text_input(
-            "Colle une description ici",
-            value="Bossage a Souder SW 3000# - Svt ASME B16.11 / - ( 'X2CrNiMo17-12-2 Svt NFEN 10222-5 ' ) - DN100xDN15"
-        )
-        if exemple:
-            attrs = extraire_attributs(exemple)
-            attrs_display = {k: v for k, v in attrs.items() if k != "_clean"}
-            st.json(attrs_display)
 
     with st.expander("Aperçu MTO"):
         st.dataframe(table_MTO[[col_MTO]].head(10), use_container_width=True)
